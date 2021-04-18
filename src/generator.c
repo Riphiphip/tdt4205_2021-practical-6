@@ -22,6 +22,22 @@ generate_stringtable(void)
     }
 }
 
+static void generate_global_vars(void)
+{
+    puts(".data");
+    size_t gname_size = tlhash_size(global_names);
+    symbol_t **gnames = malloc(gname_size * sizeof(symbol_t *));
+    tlhash_values(global_names, gnames);
+    for (int i = 0; i < tlhash_size(global_names); i++)
+    {
+        symbol_t *curr_sym = gnames[i];
+        if (curr_sym->type == SYM_GLOBAL_VAR)
+        {
+            printf("%s: .zero 8\n", curr_sym->name);
+        }
+    }
+}
+
 static void
 generate_main(symbol_t *first)
 {
@@ -74,6 +90,7 @@ generate_main(symbol_t *first)
 void generate_program(void)
 {
     generate_stringtable();
+    generate_global_vars();
 
     /* Put some dummy stuff to keep the skeleton from crashing */
     puts(".globl main");
