@@ -11,3 +11,7 @@ clean:
 	-rm -f src/parser.c src/scanner.c src/*.tab.* src/*.o
 purge: clean
 	-rm -f src/vslc
+
+.PHONY:run
+run: src/vslc
+	./src/vslc < ./vsl_programs/harder.vsl > make_run_output.txt

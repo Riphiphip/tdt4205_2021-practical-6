@@ -4,6 +4,8 @@ src/vslc
 src/y.tab.h
 .vscode/
 
+make_run_output.txt
+
 # Prerequisites
 *.d
 
