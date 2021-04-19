@@ -14,4 +14,4 @@ purge: clean
 
 .PHONY:run
 run: src/vslc
-	./src/vslc < ./vsl_programs/harder.vsl > make_run_output.txt
+	./src/vslc < ./vsl_programs/newton.vsl > make_run_output.txt
