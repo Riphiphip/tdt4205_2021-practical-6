@@ -298,9 +298,13 @@ static void generate_func_content(node_t *root, symbol_t *function, scope s)
     {
         return generate_assignment(root, function, s);
     }
-    case RETURN_STATEMENT: {
-        if (root->n_children > 0){
-            return generate_expression(root->children[0], function, s);
+    case RETURN_STATEMENT:
+    {
+        if (root->n_children > 0)
+        {
+            generate_expression(root->children[0], function, s);
+            puts("\tret");
+            return;
         }
         return;
     }
