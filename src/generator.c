@@ -32,12 +32,12 @@ static void generate_global_vars(void)
     size_t gname_size = tlhash_size(global_names);
     symbol_t **gnames = malloc(gname_size * sizeof(symbol_t *));
     tlhash_values(global_names, (void **)gnames);
-    for (int i = 0; i < tlhash_size(global_names); i++)
+    for (int i = 0; i < gname_size; i++)
     {
         symbol_t *curr_sym = gnames[i];
         if (curr_sym->type == SYM_GLOBAL_VAR)
         {
-            printf("%s:\t.zero 8\n", curr_sym->name);
+            printf("_%s:\t.zero 8\n", curr_sym->name);
         }
     }
     free(gnames);
