@@ -19,7 +19,7 @@ node_print ( node_t *root, int nesting )
             node_print ( root->children[i], nesting+1 );
     }
     else
-        printf ( "%*c%p\n", nesting, ' ', root );
+        printf ( "# %*c%p\n", nesting, ' ', root );
 }
 
 
