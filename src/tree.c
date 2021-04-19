@@ -6,14 +6,14 @@ node_print ( node_t *root, int nesting )
 {
     if ( root != NULL )
     {
-        printf ( "%*c%s", nesting, ' ', node_string[root->type] );
+        printf ( "# %*c%s", nesting, ' ', node_string[root->type] );
         if ( root->type == IDENTIFIER_DATA ||
              root->type == STRING_DATA ||
              root->type == RELATION ||
              root->type == EXPRESSION ) 
-            printf ( "(%s)", (char *) root->data );
+            printf ( "# (%s)", (char *) root->data );
         else if ( root->type == NUMBER_DATA )
-            printf ( "(%ld)", *((int64_t *)root->data) );
+            printf ( "# (%ld)", *((int64_t *)root->data) );
         putchar ( '\n' );
         for ( int64_t i=0; i<root->n_children; i++ )
             node_print ( root->children[i], nesting+1 );
