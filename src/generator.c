@@ -126,7 +126,10 @@ static void generate_access(symbol_t *symbol, symbol_t *function)
 
 static void generate_relation(node_t *node, symbol_t *function, scope s)
 {
-    
+}
+
+static void generate_function_call(node_t *node, symbol_t *function)
+{
 }
 
 static void generate_expression(node_t *node, symbol_t *function, scope s)
@@ -151,7 +154,102 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
     case NUMBER_DATA:
     {
         printf("\tmovq $%ld, %%rax\n", *(long *)node->data);
-        return; 
+        return;
+    }
+    case EXPRESSION:
+    {
+        if (node->data == NULL)
+        {
+            return generate_function_call(node, function);
+        }
+        generate_expression(node->children[0], function, s);
+        if (node->n_children > 1)
+        {
+            puts("\tpushq %rax");
+            generate_expression(node->children[1], function, s);
+            puts("\tpopq %r10");
+            switch (*(char *)node->data)
+            {
+            case '+':
+            {
+                puts("\taddq %r10, %rax");
+                break;
+            }
+            case '-':
+            {
+                puts("\tsubq %rax, %r10");
+                puts("\tmovq %r10, %rax");
+                break;
+            }
+            case '*':
+            {
+                puts("\tpushq %rdx");
+                puts("\timulq %r10");
+                puts("\tpopq %rdx");
+                break;
+            }
+            case '/':
+            {
+                puts("\tpushq %rdx");
+                puts("\tmovq %rax, %rdx");
+                puts("\tmovq %r10, %rax");
+                puts("\tmovq %rdx, %r10");
+                puts("\tcqto"); //Extend sign from %rax into %rdx.
+                puts("\tidivq %r10");
+                puts("\tpopq %rdx");
+                break;
+            }
+            case '<':
+            {
+                puts("\tpushq %rcx");
+                puts("\tmovq %rax, %rcx");
+                puts("\tmovq %r10, %rax");
+                puts("\tshl %cl, %rax");
+                puts("\tpopq %rcx");
+                break;
+            }
+            case '>':
+            {
+                puts("\tpushq %rcx");
+                puts("\tmovq %rax, %rcx");
+                puts("\tmovq %r10, %rax");
+                puts("\tshr %cl, %rax");
+                puts("\tpopq %rcx");
+                break;
+            }
+            case '&':
+            {
+                puts("\tand %r10, %rax");
+                break;
+            }
+            case '|':
+            {
+                puts("\tor %r10, %rax");
+                break;
+            }
+            case '^':
+            {
+                puts("\txor %r10, %rax");
+                break;
+            }
+            }
+        }
+        else
+        {
+            switch (*(char *)node->data)
+            {
+            case '-':
+            {
+                puts("\tneg %rax");
+                break;
+            }
+            case '~':
+            {
+                puts("\tnot %rax");
+            }
+            }
+        }
+        break;
     }
     }
 }
@@ -200,21 +298,11 @@ static void generate_func_content(node_t *root, symbol_t *function, scope s)
     {
         return generate_assignment(root, function, s);
     }
-    case IDENTIFIER_DATA:
-    {
-        if (root->entry != NULL)
-        {
-            switch (root->entry->type)
-            {
-            case SYM_LOCAL_VAR:
-            case SYM_PARAMETER:
-            case SYM_GLOBAL_VAR:
-            {
-                return generate_access(root->entry, function);
-            }
-            }
+    case RETURN_STATEMENT: {
+        if (root->n_children > 0){
+            return generate_expression(root->children[0], function, s);
         }
-        break;
+        return;
     }
     default:
     {
@@ -233,9 +321,6 @@ static void generate_function(symbol_t *symbol)
     printf(".globl __vslc_%s\n", symbol->name);
     puts(".text");
     printf("__vslc_%s:\n", symbol->name);
-    symbol_t **asd = malloc(symbol->nparms * sizeof(symbol_t *));
-    tlhash_values(symbol->locals, asd);
-    free(asd);
     scope s;
     s.if_id = 0;
     s.while_id = 0;
