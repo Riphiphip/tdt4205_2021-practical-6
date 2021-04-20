@@ -124,8 +124,13 @@ static void generate_access(symbol_t *symbol, symbol_t *function)
     }
 }
 
-static void generate_relation(node_t *node, symbol_t *function, scope s)
+static void generate_comparison(node_t *root, symbol_t *function, scope s)
 {
+    generate_expression(root->children[0], function, s);
+    puts("\tpushq %rax");
+    generate_expression(root->children[1], function, s);
+    puts("\tpopq %r10");
+    puts("\tcmp %r10, %rax");
 }
 
 static void generate_function_call(node_t *node, symbol_t *function)
@@ -286,7 +291,50 @@ static void generate_assignment(node_t *node, symbol_t *function, scope s)
     }
 }
 
-static void generate_func_content(node_t *root, symbol_t *function, scope s)
+static void generate_if_statement(node_t *root, symbol_t *function, scope s)
+{
+    s.if_id = ++if_id;
+    printf("__vslif_%d_top:\n", s.if_id);
+    generate_comparison(root->children[0], function, s);
+    char *jmp_instr;
+
+    switch (*(char *)(root->children[0]->data))
+    {
+    case '=':
+    {
+        jmp_instr = "jne";
+        break;
+    }
+    case '<':
+    {
+        jmp_instr = "jnl";
+        break;
+    }
+    case '>':
+    {
+        jmp_instr = "jng";
+        break;
+    }
+    }
+    if (root->n_children == 2)
+    {
+        // No Else
+        printf("\t%s __vslif_%d_bottom\n", jmp_instr, s.if_id);
+        generate_statements(root->children[1], function, s);
+    }
+    else if (root->n_children > 2)
+    {
+        // With Else
+        printf("\t%s __vslif_%d_else\n", jmp_instr, s.if_id);
+        generate_statements(root->children[1], function, s);
+        printf("\tjmp __vslif_%d_bottom\n", s.if_id);
+        printf("__vslif_%d_else:\n", s.if_id);
+        generate_statements(root->children[2], function, s);
+    }
+    printf("__vslif_%d_bottom:\n", s.if_id);
+}
+
+static void generate_statements(node_t *root, symbol_t *function, scope s)
 {
     switch (root->type)
     {
@@ -308,12 +356,16 @@ static void generate_func_content(node_t *root, symbol_t *function, scope s)
         }
         return;
     }
+    case IF_STATEMENT:
+    {
+        return generate_if_statement(root, function, s);
+    }
     default:
     {
         for (int i = 0; i < root->n_children; i++)
         {
             if (root->children[i] != NULL)
-                generate_func_content(root->children[i], function, s);
+                generate_statements(root->children[i], function, s);
         }
         break;
     }
@@ -322,13 +374,13 @@ static void generate_func_content(node_t *root, symbol_t *function, scope s)
 
 static void generate_function(symbol_t *symbol)
 {
-    printf(".globl __vslc_%s\n", symbol->name);
+    printf(".globl __vsl_%s\n", symbol->name);
     puts(".text");
-    printf("__vslc_%s:\n", symbol->name);
+    printf("__vsl_%s:\n", symbol->name);
     scope s;
     s.if_id = 0;
     s.while_id = 0;
-    generate_func_content(symbol->node, symbol, s);
+    generate_statements(symbol->node, symbol, s);
     puts("");
 }
 
