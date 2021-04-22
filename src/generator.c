@@ -334,6 +334,38 @@ static void generate_if_statement(node_t *root, symbol_t *function, scope s)
     printf("__vslif_%d_bottom:\n", s.if_id);
 }
 
+static void generate_while_statement(node_t *root, symbol_t *function, scope s)
+{
+    s.while_id = ++while_id;
+    printf("__vslwhile_%d_top:\n", s.while_id);
+    generate_comparison(root->children[0], function, s);
+    char *jmp_instr;
+
+    switch (*(char *)(root->children[0]->data))
+    {
+    case '=':
+    {
+        jmp_instr = "jne";
+        break;
+    }
+    case '<':
+    {
+        jmp_instr = "jnl";
+        break;
+    }
+    case '>':
+    {
+        jmp_instr = "jng";
+        break;
+    }
+    }
+    // No Else
+    printf("\t%s __vslwhile_%d_bottom\n", jmp_instr, s.while_id);
+    generate_statements(root->children[1], function, s);
+    printf("\tjmp __vslwhile_%d_top\n", s.while_id);
+    printf("__vslwhile_%d_bottom:\n", s.while_id);
+}
+
 static void generate_statements(node_t *root, symbol_t *function, scope s)
 {
     switch (root->type)
@@ -359,6 +391,9 @@ static void generate_statements(node_t *root, symbol_t *function, scope s)
     case IF_STATEMENT:
     {
         return generate_if_statement(root, function, s);
+    }
+    case WHILE_STATEMENT:{
+        return generate_while_statement(root, function, s);
     }
     default:
     {
