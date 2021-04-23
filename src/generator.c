@@ -123,9 +123,17 @@ static void generate_access(symbol_t *symbol, symbol_t *function)
     }
 }
 
-static void generate_relation(node_t *node, symbol_t *function, scope s)
+static void generate_comparison(node_t *root, symbol_t *function, scope s)
 {
-    
+    generate_expression(root->children[0], function, s);
+    puts("\tpushq %rax");
+    generate_expression(root->children[1], function, s);
+    puts("\tpopq %r10");
+    puts("\tcmp %r10, %rax");
+}
+
+static void generate_function_call(node_t *node, symbol_t *function)
+{
 }
 
 static void generate_expression(node_t *node, symbol_t *function, scope s)
@@ -150,7 +158,102 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
     case NUMBER_DATA:
     {
         printf("\tmovq $%ld, %%rax\n", *(long *)node->data);
-        return; 
+        return;
+    }
+    case EXPRESSION:
+    {
+        if (node->data == NULL)
+        {
+            return generate_function_call(node, function);
+        }
+        generate_expression(node->children[0], function, s);
+        if (node->n_children > 1)
+        {
+            puts("\tpushq %rax");
+            generate_expression(node->children[1], function, s);
+            puts("\tpopq %r10");
+            switch (*(char *)node->data)
+            {
+            case '+':
+            {
+                puts("\taddq %r10, %rax");
+                break;
+            }
+            case '-':
+            {
+                puts("\tsubq %rax, %r10");
+                puts("\tmovq %r10, %rax");
+                break;
+            }
+            case '*':
+            {
+                puts("\tpushq %rdx");
+                puts("\timulq %r10");
+                puts("\tpopq %rdx");
+                break;
+            }
+            case '/':
+            {
+                puts("\tpushq %rdx");
+                puts("\tmovq %rax, %rdx");
+                puts("\tmovq %r10, %rax");
+                puts("\tmovq %rdx, %r10");
+                puts("\tcqto"); //Extend sign from %rax into %rdx.
+                puts("\tidivq %r10");
+                puts("\tpopq %rdx");
+                break;
+            }
+            case '<':
+            {
+                puts("\tpushq %rcx");
+                puts("\tmovq %rax, %rcx");
+                puts("\tmovq %r10, %rax");
+                puts("\tshl %cl, %rax");
+                puts("\tpopq %rcx");
+                break;
+            }
+            case '>':
+            {
+                puts("\tpushq %rcx");
+                puts("\tmovq %rax, %rcx");
+                puts("\tmovq %r10, %rax");
+                puts("\tshr %cl, %rax");
+                puts("\tpopq %rcx");
+                break;
+            }
+            case '&':
+            {
+                puts("\tand %r10, %rax");
+                break;
+            }
+            case '|':
+            {
+                puts("\tor %r10, %rax");
+                break;
+            }
+            case '^':
+            {
+                puts("\txor %r10, %rax");
+                break;
+            }
+            }
+        }
+        else
+        {
+            switch (*(char *)node->data)
+            {
+            case '-':
+            {
+                puts("\tneg %rax");
+                break;
+            }
+            case '~':
+            {
+                puts("\tnot %rax");
+            }
+            }
+        }
+        break;
     }
     }
 }
@@ -187,7 +290,82 @@ static void generate_assignment(node_t *node, symbol_t *function, scope s)
     }
 }
 
-static void generate_func_content(node_t *root, symbol_t *function, scope s)
+static void generate_if_statement(node_t *root, symbol_t *function, scope s)
+{
+    s.if_id = ++if_id;
+    printf("__vslif_%d_top:\n", s.if_id);
+    generate_comparison(root->children[0], function, s);
+    char *jmp_instr;
+
+    switch (*(char *)(root->children[0]->data))
+    {
+    case '=':
+    {
+        jmp_instr = "jne";
+        break;
+    }
+    case '<':
+    {
+        jmp_instr = "jnl";
+        break;
+    }
+    case '>':
+    {
+        jmp_instr = "jng";
+        break;
+    }
+    }
+    if (root->n_children == 2)
+    {
+        // No Else
+        printf("\t%s __vslif_%d_bottom\n", jmp_instr, s.if_id);
+        generate_statements(root->children[1], function, s);
+    }
+    else if (root->n_children > 2)
+    {
+        // With Else
+        printf("\t%s __vslif_%d_else\n", jmp_instr, s.if_id);
+        generate_statements(root->children[1], function, s);
+        printf("\tjmp __vslif_%d_bottom\n", s.if_id);
+        printf("__vslif_%d_else:\n", s.if_id);
+        generate_statements(root->children[2], function, s);
+    }
+    printf("__vslif_%d_bottom:\n", s.if_id);
+}
+
+static void generate_while_statement(node_t *root, symbol_t *function, scope s)
+{
+    s.while_id = ++while_id;
+    printf("__vslwhile_%d_top:\n", s.while_id);
+    generate_comparison(root->children[0], function, s);
+    char *jmp_instr;
+
+    switch (*(char *)(root->children[0]->data))
+    {
+    case '=':
+    {
+        jmp_instr = "jne";
+        break;
+    }
+    case '<':
+    {
+        jmp_instr = "jnl";
+        break;
+    }
+    case '>':
+    {
+        jmp_instr = "jng";
+        break;
+    }
+    }
+    // No Else
+    printf("\t%s __vslwhile_%d_bottom\n", jmp_instr, s.while_id);
+    generate_statements(root->children[1], function, s);
+    printf("\tjmp __vslwhile_%d_top\n", s.while_id);
+    printf("__vslwhile_%d_bottom:\n", s.while_id);
+}
+
+static void generate_statements(node_t *root, symbol_t *function, scope s)
 {
     switch (root->type)
     {
@@ -199,28 +377,29 @@ static void generate_func_content(node_t *root, symbol_t *function, scope s)
     {
         return generate_assignment(root, function, s);
     }
-    case IDENTIFIER_DATA:
+    case RETURN_STATEMENT:
     {
-        if (root->entry != NULL)
+        if (root->n_children > 0)
         {
-            switch (root->entry->type)
-            {
-            case SYM_LOCAL_VAR:
-            case SYM_PARAMETER:
-            case SYM_GLOBAL_VAR:
-            {
-                return generate_access(root->entry, function);
-            }
-            }
+            generate_expression(root->children[0], function, s);
+            puts("\tret");
+            return;
         }
-        break;
+        return;
+    }
+    case IF_STATEMENT:
+    {
+        return generate_if_statement(root, function, s);
+    }
+    case WHILE_STATEMENT:{
+        return generate_while_statement(root, function, s);
     }
     default:
     {
         for (int i = 0; i < root->n_children; i++)
         {
             if (root->children[i] != NULL)
-                generate_func_content(root->children[i], function, s);
+                generate_statements(root->children[i], function, s);
         }
         break;
     }
@@ -229,7 +408,7 @@ static void generate_func_content(node_t *root, symbol_t *function, scope s)
 
 static void generate_function(symbol_t *symbol)
 {
-    printf(".globl __vslc_%s\n", symbol->name);
+    printf(".globl __vsl_%s\n", symbol->name);
     puts(".text");
     printf("__vslc_%s:\n", symbol->name);
 

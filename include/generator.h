@@ -25,4 +25,6 @@ static void generate_local_assignment(symbol_t *symbol, symbol_t* function);
 static void generate_assignment(node_t *node, symbol_t* function, scope s);
 
 static void generate_expression(node_t *node, symbol_t* function, scope s);
-static void generate_relation(node_t *node, symbol_t* function, scope s);
+static void generate_comparison(node_t *node, symbol_t* function, scope s);
+
+static void generate_statements(node_t *node, symbol_t* function, scope s);
