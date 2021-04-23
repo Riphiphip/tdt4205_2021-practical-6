@@ -1,8 +1,7 @@
 #include "vslc.h"
+#include "generator.h"
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
-static const char *record[6] = {
-    "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
 // Used for generating unique label names for `if` and `while` statements
 int while_id = 0;
@@ -233,14 +232,51 @@ static void generate_function(symbol_t *symbol)
     printf(".globl __vslc_%s\n", symbol->name);
     puts(".text");
     printf("__vslc_%s:\n", symbol->name);
-    symbol_t **asd = malloc(symbol->nparms * sizeof(symbol_t *));
-    tlhash_values(symbol->locals, asd);
-    free(asd);
+
+    // Move the current stack pointer into the base pointer register
+    // This is done so we can restore it later
+    puts("movq %rsp, %rbp");
+    // Fix stack allignment from function calls
+    puts("subq 8, %rsp");
+
+    // Push the basepointer so we can use the stack dynamically.
+    // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically pushes rsp too
+    puts("push %rbp");
+
+    // 64 bits/8 bytes for each var on the stack
+    size_t stack_allocation = 8 * tlhash_size(symbol->locals);
+    // Allocate space on the stack for all locals
+    printf("subq $%lu, %rsp", stack_allocation);
+    // Then put copies of the args onto the stack
+    // size_t nlocals = tlhash_size(symbol->locals);
+    // char **local_keys = malloc(sizeof(char *) * nlocals);
+    // tlhash_keys(symbol->locals, local_keys);
+    // int status;
+    // for (int arg = 0; arg < symbol->nparms; arg++)
+    // {
+    //     char *key = local_keys[arg];
+    //     symbol_t *local_sym;
+    //     tlhash_lookup(symbol->locals, key, strlen(key) + 1, local_sym);
+    //     node_t *local_node = local_sym->node;
+    //     int64_t val = (int64_t) local_node->data;
+    //     printf("pushq $%ld", val);
+    // }
+    // free(local_keys);
+
+    // symbol_t **asd = malloc(symbol->nparms * sizeof(symbol_t *));
+    // tlhash_values(symbol->locals, asd);
+    // free(asd);
     scope s;
     s.if_id = 0;
     s.while_id = 0;
     generate_func_content(symbol->node, symbol, s);
-    puts("");
+
+    // Restore the stack pointer and pop the basepointer
+    // This also deallocs what space we used on the stack, regardless of how much was allocated
+    // This means we avoid popping args off the stack too
+    puts("movq %rbp, %rsp");
+    printf("pop %rbp");
+    puts("ret");
 }
 
 static void generate_functions(void)
