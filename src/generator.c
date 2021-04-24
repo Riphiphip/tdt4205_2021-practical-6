@@ -371,6 +371,7 @@ static void generate_while_statement(node_t *root, symbol_t *function, scope s)
 
 static void generate_print_statement(node_t *root, symbol_t *function, scope s)
 {
+
     for (int i = 0; i < root->n_children; i++)
     {
         node_t *child = root->children[i];
@@ -379,7 +380,7 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         case STRING_DATA:
         {
             puts("\tmovq strout(%rip), %rdi");
-            printf("\tmovq STR%ld(%%rip), %%rsi\n", *(size_t*)child->data);
+            printf("\tmovq STR%ld(%%rip), %%rsi\n", *(size_t *)child->data);
             break;
         }
         case IDENTIFIER_DATA:
@@ -392,10 +393,16 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
             break;
         }
         }
+        puts("pushq %rax");
+        puts("movq $2, %rax");
         puts("\tcall printf");
+        puts("popq %rax");
     };
     puts("\tmovq $'\\n, %rdi"); //Print newline
+    puts("pushq %rax");
+    puts("movq 12, %rax");
     puts("\tcall printf");
+    puts("popq %rax");
 }
 
 static void generate_statements(node_t *root, symbol_t *function, scope s)
@@ -459,7 +466,7 @@ static void generate_function(symbol_t *symbol)
     // This is done so we can restore it later
     puts("movq %rsp, %rbp");
     // Fix stack allignment from function calls
-    puts("subq 8, %rsp");
+    puts("subq $8, %rsp");
 
     // Push the basepointer so we can use the stack dynamically.
     // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically pushes rsp too
