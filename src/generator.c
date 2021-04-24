@@ -115,7 +115,7 @@ static void generate_local_access(symbol_t *symbol, symbol_t *function)
 #if DEBUG_GENERATOR == 1
     printf("# Access local (%s, seq: %lu) #\n", symbol->name, symbol->seq);
 #endif
-    int rbp_offset = -((symbol->seq + 1) * 8);
+    int rbp_offset = -((symbol->seq + 1) * 8 + ALIGNED_VARIABLES(function->nparms));
     printf("\tmovq %d(%%rbp), %%rax\n", rbp_offset);
 }
 
@@ -315,7 +315,7 @@ static void generate_local_assignment(symbol_t *symbol, symbol_t *function)
 #if DEBUG_GENERATOR == 1
     printf("# Local assignment of %s #\n", symbol->name);
 #endif
-    int rbp_offset = -((symbol->seq + 1) * 8);
+    int rbp_offset = -((symbol->seq + 1) * 8 + ALIGNED_VARIABLES(function->nparms));
     printf("\tmovq %%rax, %d(%%rbp)\n", rbp_offset);
 }
 
