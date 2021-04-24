@@ -80,7 +80,7 @@ generate_main(symbol_t *first)
         printf("\tpopq\t%s\n", record[arg]);
 
     puts("SKIP_ARGS:");
-    printf("\tcall\t_%s\n", first->name);
+    printf("\tcall __vslc_%s\n", first->name);
     puts("\tjmp END");
     puts("ABORT:");
     puts("\tmovq $errout, %rdi");
@@ -463,7 +463,7 @@ static void generate_function(symbol_t *symbol)
 
     // Push the basepointer so we can use the stack dynamically.
     // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically pushes rsp too
-    puts("push %rbp");
+    puts("pushq %rbp");
 
     // 64 bits/8 bytes for each var on the stack
     size_t stack_allocation = 8 * tlhash_size(symbol->locals);
@@ -497,7 +497,7 @@ static void generate_function(symbol_t *symbol)
     // This also deallocs what space we used on the stack, regardless of how much was allocated
     // This means we avoid popping args off the stack too
     puts("movq %rbp, %rsp");
-    puts("pop %rbp");
+    puts("popq %rbp");
     puts("ret");
 }
 
