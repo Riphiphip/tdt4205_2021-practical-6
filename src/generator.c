@@ -21,7 +21,7 @@ generate_stringtable(void)
     /* TODO:  handle the strings from the program */
     for (int i = 0; i < stringc; i++)
     {
-        printf("STR%d:\t.asciz %s: \n", i, string_list[i]);
+        printf("STR%d:\t.asciz %s\n", i, string_list[i]);
     }
 }
 
