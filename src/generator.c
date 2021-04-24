@@ -80,11 +80,7 @@ generate_main(symbol_t *first)
         printf("\tpopq\t%s\n", record[arg]);
 
     puts("SKIP_ARGS:");
-<<<<<<< HEAD
-    printf("\tcall\t__vslc_%s\n", first->name);
-=======
     printf("\tcall __vslc_%s\n", first->name);
->>>>>>> aeb88f641043e8fcce2711d1124ef48783f4ad66
     puts("\tjmp END");
     puts("ABORT:");
     puts("\tmovq $errout, %rdi");
@@ -140,6 +136,10 @@ static void generate_comparison(node_t *root, symbol_t *function, scope s)
 
 static void generate_expression(node_t *node, symbol_t *function, scope s)
 {
+    if (node == NULL)
+    {
+        return;
+    }
     switch (node->type)
     {
     case IDENTIFIER_DATA:
@@ -371,8 +371,8 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         {
         case STRING_DATA:
         {
-            puts("\tmovq strout(%rip), %rdi");
-            printf("\tmovq STR%ld(%%rip), %%rsi\n", *(size_t *)child->data);
+            puts("\tlea strout(%rip), %rdi");
+            printf("\tlea STR%ld(%%rip), %%rsi\n", *(size_t *)child->data);
             break;
         }
         case IDENTIFIER_DATA:
@@ -380,7 +380,7 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         case EXPRESSION:
         {
             generate_expression(child, function, s);
-            puts("\tmovq intout(%rip), %rdi");
+            puts("\tlea intout(%rip), %rdi");
             puts("\tmovq %rax, %rsi");
             break;
         }
@@ -526,8 +526,10 @@ static void generate_function_content(node_t *node, symbol_t *function, scope s)
 // Comparison function between two symbol table entries. Sorts by sequence number
 int seq_comp(const void *e1, const void *e2)
 {
-    if (((symbol_t *)e1)->seq > ((symbol_t *)e2)->seq) return 1;
-    if (((symbol_t *)e1)->seq < ((symbol_t *)e2)->seq) return -1;
+    if (((symbol_t *)e1)->seq > ((symbol_t *)e2)->seq)
+        return 1;
+    if (((symbol_t *)e1)->seq < ((symbol_t *)e2)->seq)
+        return -1;
     return 0;
 }
 
@@ -541,27 +543,27 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
 
     symbol_t *function = func_identifier->entry;
     size_t nlocals = tlhash_size(function->locals);
-    symbol_t **locals = (symbol_t **) malloc(sizeof(symbol_t *) * nlocals);
+    symbol_t **locals = (symbol_t **)malloc(sizeof(symbol_t *) * nlocals);
     tlhash_values(function->locals, (void **)locals);
 
     // Sort the locals by their sequence number. Just a precaution to ensure correct pushing order
     qsort(locals, nlocals, sizeof(symbol_t *), seq_comp);
 
-    #if DEBUG_GENERATOR == 1
+#if DEBUG_GENERATOR == 1
     puts("%% BEGIN FCALL %%");
-    #endif
+#endif
     // Reverse order because args should be pushed onto the stack in reverse order (then popping gives correct arg order)
     for (int i = function->nparms - 1; i >= 0; i--)
     {
         symbol_t *local = locals[i];
-        // Generate code that resolves the value of the argument
-        #if DEBUG_GENERATOR == 1
+// Generate code that resolves the value of the argument
+#if DEBUG_GENERATOR == 1
         printf("%% BEGIN RESOLVING ARG#%ld %%\n", local->seq);
-        #endif
+#endif
         generate_expression(arg_list->children[local->seq], caller, s);
-        #if DEBUG_GENERATOR == 1
+#if DEBUG_GENERATOR == 1
         printf("%% END RESOLVING ARG#%ld %%\n", local->seq);
-        #endif
+#endif
 
         // First 6 arguments go into registers
         if (local->type == SYM_PARAMETER && local->seq <= 5)
@@ -570,7 +572,7 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
             printf("\tmovq %%rax, %s\n", param_register);
         }
         // Remaining args go to the stack
-        else if(local->seq > 5)
+        else if (local->seq > 5)
         {
             puts("pushq %%rax");
         }
@@ -578,9 +580,9 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
 
     // Perform the call
     printf("\tcall __vslc_%s\n", function->name);
-    #if DEBUG_GENERATOR == 1
+#if DEBUG_GENERATOR == 1
     puts("%% END FCALL %%");
-    #endif
+#endif
     free(locals);
 }
 
