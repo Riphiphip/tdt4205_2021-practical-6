@@ -14,9 +14,10 @@ generate_stringtable(void)
 	 * error msg. from main
 	 */
     puts(".data");
-    puts("intout: .asciz \"\%ld \"");
-    puts("strout: .asciz \"\%s \"");
-    puts("errout: .asciz \"Wrong number of arguments\"");
+    puts("intout:  .asciz \"\%ld \"");
+    puts("strout:  .asciz \"\%s \"");
+    puts("newline: .asciz \"\\n\"");
+    puts("errout:  .asciz \"Wrong number of arguments\"");
 
     /* TODO:  handle the strings from the program */
     for (int i = 0; i < stringc; i++)
@@ -93,7 +94,7 @@ generate_main(symbol_t *first)
 
 static void generate_global_access(symbol_t *symbol)
 {
-    printf("\tmovq %s(%%rip), %%rax\n", symbol->name);
+    printf("\tmovq _%s(%%rip), %%rax\n", symbol->name);
 }
 
 static void generate_parameter_access(symbol_t *symbol)
@@ -254,7 +255,7 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 
 static void generate_global_assignment(symbol_t *symbol)
 {
-    printf("movq %%rax, %s(%%rip)\n", symbol->name);
+    printf("movq %%rax, _%s(%%rip)\n", symbol->name);
 }
 
 static void generate_parameter_assignment(symbol_t *symbol)
@@ -386,13 +387,13 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         }
         }
         puts("pushq %rax");
-        puts("movq $2, %rax");
+        puts("movq $0, %rax");
         puts("\tcall printf");
         puts("popq %rax");
     };
-    puts("\tmovq $'\\n, %rdi"); //Print newline
+    puts("\tlea newline(%rip), %rdi");
     puts("pushq %rax");
-    puts("movq 12, %rax");
+    puts("movq $0, %rax");
     puts("\tcall printf");
     puts("popq %rax");
 }
