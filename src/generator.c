@@ -80,11 +80,7 @@ generate_main(symbol_t *first)
         printf("\tpopq\t%s\n", record[arg]);
 
     puts("SKIP_ARGS:");
-<<<<<<< HEAD
-    printf("\tcall\t__vslc_%s\n", first->name);
-=======
     printf("\tcall __vslc_%s\n", first->name);
->>>>>>> aeb88f641043e8fcce2711d1124ef48783f4ad66
     puts("\tjmp END");
     puts("ABORT:");
     puts("\tmovq $errout, %rdi");
