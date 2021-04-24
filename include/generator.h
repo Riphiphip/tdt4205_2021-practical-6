@@ -6,6 +6,8 @@ typedef struct
     int while_id;
 } scope;
 
+#define DEBUG_GENERATOR 0
+
 // How many registers are used for parameters before resorting to using the stack
 #define N_PARAM_REGISTERS 6
 static const char *record[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
@@ -30,5 +32,5 @@ static void generate_comparison(node_t *node, symbol_t* function, scope s);
 static void generate_statements(node_t *node, symbol_t* function, scope s);
 
 static void generate_function(symbol_t *symbol);
-static void generate_func_content(node_t *node, symbol_t *function, scope s);
-static void generate_func_call(node_t *node);
+static void generate_function_content(node_t *node, symbol_t *function, scope s);
+static void generate_function_call(node_t *call_node, symbol_t *caller, scope s);
