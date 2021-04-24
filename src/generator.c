@@ -16,7 +16,7 @@ generate_stringtable(void)
     puts(".data");
     puts("intout: .asciz \"\%ld \"");
     puts("strout: .asciz \"\%s \"");
-    puts("newline: .asciz \"\n\"");
+    puts("newline: .asciz \"\\n\"");
     puts("errout: .asciz \"Wrong number of arguments\"");
 
     /* TODO:  handle the strings from the program */
