@@ -100,14 +100,14 @@ static void generate_global_access(symbol_t *symbol)
 static void generate_parameter_access(symbol_t *symbol)
 {
     printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    puts("neg %rax");
+    puts("\tneg %rax");
     printf("\tmovq (%%rbp, %%rax, 8), %%rax\n");
 }
 
 static void generate_local_access(symbol_t *symbol, symbol_t *function)
 {
     printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    puts("neg %rax");
+    puts("\tneg %rax");
     printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", -ALIGNED_VARIABLES(function->nparms));
 }
 
@@ -173,17 +173,26 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
             {
             case '+':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Addition of %s and %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\taddq %r10, %rax");
                 break;
             }
             case '-':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Subtraction of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tsubq %rax, %r10");
                 puts("\tmovq %r10, %rax");
                 break;
             }
             case '*':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Multiplication of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tpushq %rdx");
                 puts("\timulq %r10");
                 puts("\tpopq %rdx");
@@ -191,6 +200,9 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
             }
             case '/':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Division of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tpushq %rdx");
                 puts("\tmovq %rax, %rdx");
                 puts("\tmovq %r10, %rax");
@@ -202,6 +214,9 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
             }
             case '<':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Bitwise left shift of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tpushq %rcx");
                 puts("\tmovq %rax, %rcx");
                 puts("\tmovq %r10, %rax");
@@ -211,6 +226,9 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
             }
             case '>':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Bitwise right shift of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tpushq %rcx");
                 puts("\tmovq %rax, %rcx");
                 puts("\tmovq %r10, %rax");
@@ -220,16 +238,25 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
             }
             case '&':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Bitwise and of %s and %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tand %r10, %rax");
                 break;
             }
             case '|':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Bitwise or of %s and %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\tor %r10, %rax");
                 break;
             }
             case '^':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Bitwise xor of %s and %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
+#endif
                 puts("\txor %r10, %rax");
                 break;
             }
@@ -241,11 +268,17 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
             {
             case '-':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Unary negation of %s #\n", (char *)node->children[0]->data);
+#endif
                 puts("\tneg %rax");
                 break;
             }
             case '~':
             {
+#if DEBUG_GENERATOR == 1
+                printf("# Unary bitwise not of %s #\n", (char *)node->children[0]->data);
+#endif
                 puts("\tnot %rax");
             }
             }
@@ -376,6 +409,9 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         {
         case STRING_DATA:
         {
+#if DEBUG_GENERATOR == 1
+            puts("# Loading string from data #");
+#endif
             puts("\tlea strout(%rip), %rdi");
             printf("\tlea STR%ld(%%rip), %%rsi\n", *(size_t *)child->data);
             break;
@@ -384,17 +420,26 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         case NUMBER_DATA:
         case EXPRESSION:
         {
+#if DEBUG_GENERATOR == 1
+        printf("# Evaluating expression before print #\n");
+#endif
             generate_expression(child, function, s);
             puts("\tlea intout(%rip), %rdi");
             puts("\tmovq %rax, %rsi");
             break;
         }
         }
+#if DEBUG_GENERATOR == 1
+        printf("# Printing statement %d/%lu #\n", i, root->n_children);
+#endif
         puts("\tpushq %rax");
         puts("\tmovq $0, %rax");
         puts("\tcall printf");
         puts("\tpopq %rax");
     };
+#if DEBUG_GENERATOR == 1
+    puts("# Newline at end of print statement #");
+#endif
     puts("\tlea newline(%rip), %rdi");
     puts("\tpushq %rax");
     puts("\tmovq $0, %rax");
@@ -473,8 +518,7 @@ static void generate_function(symbol_t *symbol)
     // Push the basepointer so we can use the stack dynamically.
     // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically stores the old stack frame
     puts("\tpushq %rbp");
-    // Move the current stack pointer into the base pointer register
-    // This is done so we can restore it later
+    // Move the current stack pointer into the base pointer register before we allocate space on the stack
     puts("\tmovq %rsp, %rbp");
 
     size_t nlocals = tlhash_size(symbol->locals);
@@ -485,7 +529,7 @@ static void generate_function(symbol_t *symbol)
     if ((nlocals + 1) % 2 == 1)
         stack_frame_size += 8;
 #if DEBUG_GENERATOR == 1
-    printf("# Allocating %lu bytes on the stack for %lu locals (aligned: %s) #\n",
+    printf("# Allocate %lu bytes on the stack for %lu locals (aligned: %s) #\n",
         stack_frame_size,
         nlocals,
         ((nlocals + 1) % 2 == 1) ? "yes" : "no"
@@ -506,7 +550,7 @@ static void generate_function(symbol_t *symbol)
     {
         symbol_t *local = locals[i];
 #if DEBUG_GENERATOR == 1
-        printf("# Pushing argument %lu to function stack frame #\n", local->seq);
+        printf("# Push argument %lu to function stack frame #\n", local->seq);
 #endif
         if (local->seq <= 5)
         {
@@ -533,9 +577,9 @@ static void generate_function(symbol_t *symbol)
     free(locals);
     puts("\tpopq %rbx");
 
-    // Set the basepointer to the top of this stack frame
-    puts("\tmovq %rsp, %rbp");
-
+#if DEBUG_GENERATOR == 1
+    printf("# Function body (%s) #\n", symbol->name);
+#endif
     // Setup function scope for if and while labels and generate the meat & potatoes of the function
     scope s;
     s.if_id = 0;
