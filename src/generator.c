@@ -98,12 +98,14 @@ static void generate_global_access(symbol_t *symbol)
 
 static void generate_parameter_access(symbol_t *symbol)
 {
-    printf("\tmovq (%%rbp, $%ld, $8), %%rax\n", symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq (%%rbp, %%rax, 8), %%rax\n");
 }
 
 static void generate_local_access(symbol_t *symbol, symbol_t *function)
 {
-    printf("\tmovq %%rax, $%#lx(%%rbp, $%ld, $8)\n", ALIGNED_VARIABLES(function->nparms), symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", ALIGNED_VARIABLES(function->nparms));
 }
 
 static void generate_access(symbol_t *symbol, symbol_t *function)
@@ -265,12 +267,14 @@ static void generate_global_assignment(symbol_t *symbol)
 
 static void generate_parameter_assignment(symbol_t *symbol)
 {
-    printf("\tmovq %%rax, (%%rbp, $%ld, $8)\n", symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq %%rax, (%%rbp, %%rax, 8)\n");
 }
 
 static void generate_local_assignment(symbol_t *symbol, symbol_t *function)
 {
-    printf("\tmovq %%rax, $%#lx(%%rbp, $%ld, $8)\n", ALIGNED_VARIABLES(function->nparms), symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", ALIGNED_VARIABLES(function->nparms));
 }
 
 static void generate_assignment(node_t *node, symbol_t *function, scope s)
