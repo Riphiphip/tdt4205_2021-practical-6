@@ -28,3 +28,7 @@ static void generate_expression(node_t *node, symbol_t* function, scope s);
 static void generate_comparison(node_t *node, symbol_t* function, scope s);
 
 static void generate_statements(node_t *node, symbol_t* function, scope s);
+
+static void generate_function(symbol_t *symbol);
+static void generate_func_content(node_t *node, symbol_t *function, scope s);
+static void generate_func_call(node_t *node);
