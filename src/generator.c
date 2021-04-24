@@ -541,29 +541,28 @@ static void generate_function(symbol_t *symbol)
     qsort(locals, nlocals, sizeof(symbol_t *), seq_comp);
 
     int status;
-    for (int i = 0; i < symbol->nparms; i++)
+    for (int argn = 0; argn < symbol->nparms; argn++)
     {
-        symbol_t *local = locals[i];
 #if DEBUG_GENERATOR == 1
-        printf("# Push argument %lu to function stack frame #\n", local->seq);
+        printf("# Push argument %d to function stack frame #\n", argn);
 #endif
-        if (local->seq <= 5)
+        if (argn <= 5)
         {
-            printf("\tpushq %s\n", record[local->seq]);
+            printf("\tpushq %s\n", record[argn]);
         }
         else if(symbol->nparms > 6)
         {
-            // Which parameter this is relative to the register-loaded arguments, starting at 0
-            // I.e. if this is parameter #7, it's relative seq is 0, if it's #8, the relative seq is 1, and so on
+            // Which arg this is relative to the register-loaded arguments, starting at 0
+            // I.e. if this is arg #7, it's relative seq is 0, if it's #8, the relative seq is 1, and so on
             // This tells us how far back to go on the stack from where the stack arguments are
-            int relative_seq = local->seq - 7;
+            int relative_seq = argn - 7;
 
             // The rest of the arguments are stored on the stack before the return address
             // +8 because the return address is on top of the stack at %rbp
             // Then we go back 8 bytes for each argument
             int sp_offset = 8 + (relative_seq * 8);
 #if DEBUG_GENERATOR == 1
-            printf("# Retrieve argument %lu from preceding stack frame #\n", local->seq);
+            printf("# Retrieve argument %d from preceding stack frame #\n", argn);
 #endif
             // %rdi has already been pushed to the stack and is safe to use
             printf("\tmovq %d(%%rbp), %%rdi\n", sp_offset);
@@ -631,43 +630,39 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
     // Expression list for the function arguments
     node_t *arg_list = call_node->children[1];
 
-    symbol_t *function = func_identifier->entry;
-    size_t nlocals = tlhash_size(function->locals);
-    symbol_t **locals = (symbol_t **)malloc(sizeof(symbol_t *) * nlocals);
-    tlhash_values(function->locals, (void **)locals);
-
-    // Sort the locals by their sequence number. Just a precaution to ensure correct pushing order
-    qsort(locals, nlocals, sizeof(symbol_t *), seq_comp);
-
 #if DEBUG_GENERATOR == 1
     printf("# Function call (%s) #\n", (char *)func_identifier->data);
 #endif
-    // Reverse order because args should be pushed onto the stack in reverse order (then popping gives correct arg order)
-    for (int i = function->nparms - 1; i >= 0; i--)
-    {
-        symbol_t *local = locals[i];
-        // Generate code that resolves the value of the argument
-#if DEBUG_GENERATOR == 1
-        printf("# Resolve value of argument %ld #\n", local->seq);
-#endif
-        generate_expression(arg_list->children[local->seq], caller, s);
 
-        // First 6 arguments go into registers
-        if (local->type == SYM_PARAMETER && local->seq <= 5)
+    // If the arglist is null the function takes no parameters
+    if (arg_list != NULL)
+    {
+        // Reverse order because args should be pushed onto the stack in reverse order
+        for (int argn = arg_list->n_children - 1; argn >= 0; argn--)
         {
-            const char *param_register = record[local->seq];
-            printf("\tmovq %%rax, %s\n", param_register);
-        }
-        // Remaining args go to the stack
-        else if (local->seq > 5)
-        {
-            puts("\tpushq %rax");
+            // Generate code that resolves the value of the argument
+#if DEBUG_GENERATOR == 1
+            printf("# Resolve value of argument %d #\n", argn);
+#endif
+            generate_expression(arg_list->children[argn], caller, s);
+
+            // First 6 arguments go into registers
+            if (argn <= 5)
+            {
+                const char *param_register = record[argn];
+                printf("\tmovq %%rax, %s\n", param_register);
+            }
+            // Remaining args go to the stack
+            else if (argn > 5)
+            {
+                puts("\tpushq %rax");
+            }
         }
     }
 
     // Perform the call
+    symbol_t *function = func_identifier->entry;
     printf("\tcall __vslc_%s\n", function->name);
-    free(locals);
 }
 
 static void generate_functions(void)
