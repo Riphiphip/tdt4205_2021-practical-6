@@ -21,7 +21,7 @@ generate_stringtable(void)
     /* TODO:  handle the strings from the program */
     for (int i = 0; i < stringc; i++)
     {
-        printf("STR%d:\t.asciz %s: \n", i, string_list[i]);
+        printf("STR%d:\t.asciz %s\n", i, string_list[i]);
     }
 }
 
@@ -80,7 +80,11 @@ generate_main(symbol_t *first)
         printf("\tpopq\t%s\n", record[arg]);
 
     puts("SKIP_ARGS:");
+<<<<<<< HEAD
     printf("\tcall\t__vslc_%s\n", first->name);
+=======
+    printf("\tcall __vslc_%s\n", first->name);
+>>>>>>> aeb88f641043e8fcce2711d1124ef48783f4ad66
     puts("\tjmp END");
     puts("ABORT:");
     puts("\tmovq $errout, %rdi");
@@ -98,12 +102,14 @@ static void generate_global_access(symbol_t *symbol)
 
 static void generate_parameter_access(symbol_t *symbol)
 {
-    printf("\tmovq (%%rbp, $%ld, $8), %%rax\n", symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq (%%rbp, %%rax, 8), %%rax\n");
 }
 
 static void generate_local_access(symbol_t *symbol, symbol_t *function)
 {
-    printf("\tmovq %%rax, $%#lx(%%rbp, $%ld, $8)\n", ALIGNED_VARIABLES(function->nparms), symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", ALIGNED_VARIABLES(function->nparms));
 }
 
 static void generate_access(symbol_t *symbol, symbol_t *function)
@@ -253,12 +259,14 @@ static void generate_global_assignment(symbol_t *symbol)
 
 static void generate_parameter_assignment(symbol_t *symbol)
 {
-    printf("\tmovq %%rax, (%%rbp, $%ld, $8)\n", symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq %%rax, (%%rbp, %%rax, 8)\n");
 }
 
 static void generate_local_assignment(symbol_t *symbol, symbol_t *function)
 {
-    printf("\tmovq %%rax, $%#lx(%%rbp, $%ld, $8)\n", ALIGNED_VARIABLES(function->nparms), symbol->seq);
+    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", ALIGNED_VARIABLES(function->nparms));
 }
 
 static void generate_assignment(node_t *node, symbol_t *function, scope s)
@@ -355,6 +363,7 @@ static void generate_while_statement(node_t *root, symbol_t *function, scope s)
 
 static void generate_print_statement(node_t *root, symbol_t *function, scope s)
 {
+
     for (int i = 0; i < root->n_children; i++)
     {
         node_t *child = root->children[i];
@@ -363,7 +372,7 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         case STRING_DATA:
         {
             puts("\tmovq strout(%rip), %rdi");
-            printf("\tmovq STR%ld(%%rip), %%rsi\n", *(size_t*)child->data);
+            printf("\tmovq STR%ld(%%rip), %%rsi\n", *(size_t *)child->data);
             break;
         }
         case IDENTIFIER_DATA:
@@ -376,10 +385,16 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
             break;
         }
         }
+        puts("pushq %rax");
+        puts("movq $2, %rax");
         puts("\tcall printf");
+        puts("popq %rax");
     };
     puts("\tmovq $'\\n, %rdi"); //Print newline
+    puts("pushq %rax");
+    puts("movq 12, %rax");
     puts("\tcall printf");
+    puts("popq %rax");
 }
 
 static void generate_statements(node_t *root, symbol_t *function, scope s)
@@ -443,7 +458,7 @@ static void generate_function(symbol_t *symbol)
     // This is done so we can restore it later
     puts("movq %rsp, %rbp");
     // Fix stack allignment from function calls
-    puts("subq 8, %rsp");
+    puts("subq $8, %rsp");
 
     // Push the basepointer so we can use the stack dynamically.
     // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically pushes rsp too
