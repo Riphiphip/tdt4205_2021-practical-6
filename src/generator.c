@@ -16,6 +16,7 @@ generate_stringtable(void)
     puts(".data");
     puts("intout: .asciz \"\%ld \"");
     puts("strout: .asciz \"\%s \"");
+    puts("newline: .asciz \"\n\"");
     puts("errout: .asciz \"Wrong number of arguments\"");
 
     /* TODO:  handle the strings from the program */
@@ -390,7 +391,7 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         puts("\tcall printf");
         puts("\tpopq %rax");
     };
-    puts("\tmovq $'\\n, %rdi"); //Print newline
+    puts("\tlea newline(%rip), %rdi");
     puts("\tpushq %rax");
     puts("\tmovq 12, %rax");
     puts("\tcall printf");
