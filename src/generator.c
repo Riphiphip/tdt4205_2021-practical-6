@@ -254,7 +254,7 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 
 static void generate_global_assignment(symbol_t *symbol)
 {
-    printf("movq %%rax, %s(%%rip)", symbol->name);
+    printf("movq %%rax, %s(%%rip)\n", symbol->name);
 }
 
 static void generate_parameter_assignment(symbol_t *symbol)
@@ -556,7 +556,7 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
     for (int i = function->nparms - 1; i >= 0; i--)
     {
         symbol_t *local = locals[i];
-// Generate code that resolves the value of the argument
+        // Generate code that resolves the value of the argument
 #if DEBUG_GENERATOR == 1
         printf("%% BEGIN RESOLVING ARG#%ld %%\n", local->seq);
 #endif
@@ -574,7 +574,7 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
         // Remaining args go to the stack
         else if (local->seq > 5)
         {
-            puts("pushq %%rax");
+            puts("\tpushq %rax");
         }
     }
 
