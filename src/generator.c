@@ -97,18 +97,26 @@ static void generate_global_access(symbol_t *symbol)
     printf("\tmovq _%s(%%rip), %%rax\n", symbol->name);
 }
 
+// Moves the given parameter into %rax
 static void generate_parameter_access(symbol_t *symbol)
 {
-    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    puts("\tneg %rax");
-    printf("\tmovq (%%rbp, %%rax, 8), %%rax\n");
+#if DEBUG_GENERATOR == 1
+    printf("# Access parameter (%s, seq: %lu) #\n", symbol->name, symbol->seq);
+#endif
+    // x86's push decrements before moving the value into the stack,
+    // so -8(%rbp) contains the first param, -16(%rbp) the second, etc.
+    int rbp_offset = -((symbol->seq + 1) * 8);
+    printf("\tmovq %d(%%rbp), %%rax\n", rbp_offset);
 }
 
+// Moves the given symbol into %rax
 static void generate_local_access(symbol_t *symbol, symbol_t *function)
 {
-    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    puts("\tneg %rax");
-    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", -ALIGNED_VARIABLES(function->nparms));
+#if DEBUG_GENERATOR == 1
+    printf("# Access local (%s, seq: %lu) #\n", symbol->name, symbol->seq);
+#endif
+    int rbp_offset = -((symbol->seq + 1) * 8);
+    printf("\tmovq %d(%%rbp), %%rax\n", rbp_offset);
 }
 
 static void generate_access(symbol_t *symbol, symbol_t *function)
@@ -295,16 +303,20 @@ static void generate_global_assignment(symbol_t *symbol)
 
 static void generate_parameter_assignment(symbol_t *symbol)
 {
-    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    puts("neg %rax");
-    printf("\tmovq %%rax, (%%rbp, %%rax, 8)\n");
+#if DEBUG_GENERATOR == 1
+    printf("# Parameter assignment of %s #\n", symbol->name);
+#endif
+    int rbp_offset = -((symbol->seq + 1) * 8);
+    printf("\tmovq %%rax, %d(%%rbp)\n", rbp_offset);
 }
 
 static void generate_local_assignment(symbol_t *symbol, symbol_t *function)
 {
-    printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    puts("neg %rax");
-    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", -ALIGNED_VARIABLES(function->nparms));
+#if DEBUG_GENERATOR == 1
+    printf("# Local assignment of %s #\n", symbol->name);
+#endif
+    int rbp_offset = -((symbol->seq + 1) * 8);
+    printf("\tmovq %%rax, %d(%%rbp)\n", rbp_offset);
 }
 
 static void generate_assignment(node_t *node, symbol_t *function, scope s)
@@ -511,7 +523,7 @@ int seq_comp(const void *e1, const void *e2)
 
 static void generate_function(symbol_t *symbol)
 {
-    printf(".globl __vsl_%s\n", symbol->name);
+    printf(".globl __vslc_%s\n", symbol->name);
     puts(".text");
     printf("__vslc_%s:\n", symbol->name);
 
@@ -522,21 +534,6 @@ static void generate_function(symbol_t *symbol)
     puts("\tmovq %rsp, %rbp");
 
     size_t nlocals = tlhash_size(symbol->locals);
-    size_t stack_frame_size = nlocals * 8;
-    // Allocate the function's stack frame and align the stack pointer to a 16-byte boundary
-    // The function call pushes the return address (8 bytes), and we need 8 bytes for each local variable
-    // So the SP needs to be aligned by allocating 8 more bytes if nlocals + 1 is an odd number
-    if ((nlocals + 1) % 2 == 1)
-        stack_frame_size += 8;
-#if DEBUG_GENERATOR == 1
-    printf("# Allocate %lu bytes on the stack for %lu locals (aligned: %s) #\n",
-        stack_frame_size,
-        nlocals,
-        ((nlocals + 1) % 2 == 1) ? "yes" : "no"
-    );
-#endif
-    printf("\tsubq $%lu, %%rsp\n", stack_frame_size);
-
     // Push all function arguments to the bottom of the stack in reverse order
     symbol_t **locals = (symbol_t **) malloc(sizeof(symbol_t *) * nlocals);
     tlhash_values(symbol->locals, (void **) locals);
@@ -544,9 +541,7 @@ static void generate_function(symbol_t *symbol)
     qsort(locals, nlocals, sizeof(symbol_t *), seq_comp);
 
     int status;
-    // Push onto the stack in reverse order because FILO
-    puts("\tpushq %rbx");
-    for (int i = symbol->nparms - 1; i >= 0; i--)
+    for (int i = 0; i < symbol->nparms; i++)
     {
         symbol_t *local = locals[i];
 #if DEBUG_GENERATOR == 1
@@ -570,12 +565,26 @@ static void generate_function(symbol_t *symbol)
 #if DEBUG_GENERATOR == 1
             printf("# Retrieve argument %lu from preceding stack frame #\n", local->seq);
 #endif
-            printf("\tmovq %d(%%rbp), %%rbx\n", sp_offset);
-            puts("\tpushq %rbx");
+            // %rdi has already been pushed to the stack and is safe to use
+            printf("\tmovq %d(%%rbp), %%rdi\n", sp_offset);
+            puts("\tpushq %rdi");
         }
     }
     free(locals);
-    puts("\tpopq %rbx");
+
+    // Allocate the function's stack frame and align the stack pointer to a 16-byte boundary
+    // The function call pushes the return address (8 bytes), and we need 8 bytes for each local variable
+    // So the SP needs to be aligned by allocating 8 more bytes if nlocals is an even number
+    size_t stack_frame_size = (nlocals % 2 == 1) ? nlocals * 8 : nlocals * 8 + 8;
+
+#if DEBUG_GENERATOR == 1
+    printf("# Allocate %lu bytes on the stack for %lu locals (aligned: %s) #\n",
+        stack_frame_size,
+        nlocals,
+        (nlocals % 2 == 1) ? "no" : "yes"
+    );
+#endif
+    printf("\tsubq $%lu, %%rsp\n", stack_frame_size);
 
 #if DEBUG_GENERATOR == 1
     printf("# Function body (%s) #\n", symbol->name);
