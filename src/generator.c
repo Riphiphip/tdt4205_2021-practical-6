@@ -423,6 +423,7 @@ static void generate_statements(node_t *root, symbol_t *function, scope s)
         if (root->n_children > 0)
         {
             generate_expression(root->children[0], function, s);
+            puts("\tleave");
             puts("\tret");
             return;
         }
