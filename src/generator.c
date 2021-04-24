@@ -365,6 +365,35 @@ static void generate_while_statement(node_t *root, symbol_t *function, scope s)
     printf("__vslwhile_%d_bottom:\n", s.while_id);
 }
 
+static void generate_print_statement(node_t *root, symbol_t *function, scope s)
+{
+    for (int i = 0; i < root->n_children; i++)
+    {
+        node_t *child = root->children[i];
+        switch (child->type)
+        {
+        case STRING_DATA:
+        {
+            puts("\tmovq strout(%rip), %rdi");
+            printf("\tmovq STR%ld(%%rip), %%rsi\n", *(size_t*)child->data);
+            break;
+        }
+        case IDENTIFIER_DATA:
+        case NUMBER_DATA:
+        case EXPRESSION:
+        {
+            generate_expression(child, function, s);
+            puts("\tmovq intout(%rip), %rdi");
+            puts("\tmovq %rax, %rsi");
+            break;
+        }
+        }
+        puts("\tcall printf");
+    };
+    puts("\tmovq $'\\n, %rdi"); //Print newline
+    puts("\tcall printf");
+}
+
 static void generate_statements(node_t *root, symbol_t *function, scope s)
 {
     switch (root->type)
@@ -376,6 +405,10 @@ static void generate_statements(node_t *root, symbol_t *function, scope s)
     case ASSIGNMENT_STATEMENT:
     {
         return generate_assignment(root, function, s);
+    }
+    case PRINT_STATEMENT:
+    {
+        return generate_print_statement(root, function, s);
     }
     case RETURN_STATEMENT:
     {
@@ -391,8 +424,14 @@ static void generate_statements(node_t *root, symbol_t *function, scope s)
     {
         return generate_if_statement(root, function, s);
     }
-    case WHILE_STATEMENT:{
+    case WHILE_STATEMENT:
+    {
         return generate_while_statement(root, function, s);
+    }
+    case NULL_STATEMENT:
+    { // Why is continue called a NULL statement?
+        printf("\tjmp __vslwhile_%d_top\n", s.while_id);
+        return;
     }
     default:
     {
