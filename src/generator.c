@@ -16,7 +16,7 @@ generate_stringtable(void)
     puts(".data");
     puts("intout: .asciz \"\%ld \"");
     puts("strout: .asciz \"\%s \"");
-    puts("newline: .asciz \"\n\"");
+    puts("newline: .asciz \"\\n\"");
     puts("errout: .asciz \"Wrong number of arguments\"");
 
     /* TODO:  handle the strings from the program */
@@ -100,13 +100,15 @@ static void generate_global_access(symbol_t *symbol)
 static void generate_parameter_access(symbol_t *symbol)
 {
     printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    puts("neg %rax");
     printf("\tmovq (%%rbp, %%rax, 8), %%rax\n");
 }
 
 static void generate_local_access(symbol_t *symbol, symbol_t *function)
 {
     printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", ALIGNED_VARIABLES(function->nparms));
+    puts("neg %rax");
+    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", -ALIGNED_VARIABLES(function->nparms));
 }
 
 static void generate_access(symbol_t *symbol, symbol_t *function)
@@ -261,13 +263,15 @@ static void generate_global_assignment(symbol_t *symbol)
 static void generate_parameter_assignment(symbol_t *symbol)
 {
     printf("\tmovq $%#lx, %%rax\n", symbol->seq);
+    puts("neg %rax");
     printf("\tmovq %%rax, (%%rbp, %%rax, 8)\n");
 }
 
 static void generate_local_assignment(symbol_t *symbol, symbol_t *function)
 {
     printf("\tmovq $%#lx, %%rax\n", symbol->seq);
-    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", ALIGNED_VARIABLES(function->nparms));
+    puts("neg %rax");
+    printf("\tmovq %%rax, %#lx(%%rbp, %%rax, 8)\n", -ALIGNED_VARIABLES(function->nparms));
 }
 
 static void generate_assignment(node_t *node, symbol_t *function, scope s)
@@ -387,13 +391,13 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
         }
         }
         puts("\tpushq %rax");
-        puts("\tmovq $2, %rax");
+        puts("\tmovq $0, %rax");
         puts("\tcall printf");
         puts("\tpopq %rax");
     };
     puts("\tlea newline(%rip), %rdi");
     puts("\tpushq %rax");
-    puts("\tmovq 12, %rax");
+    puts("\tmovq $0, %rax");
     puts("\tcall printf");
     puts("\tpopq %rax");
 }
