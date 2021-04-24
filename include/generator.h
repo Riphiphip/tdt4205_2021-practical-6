@@ -6,7 +6,7 @@ typedef struct
     int while_id;
 } scope;
 
-#define DEBUG_GENERATOR 0
+#define DEBUG_GENERATOR 1
 
 // How many registers are used for parameters before resorting to using the stack
 #define N_PARAM_REGISTERS 6

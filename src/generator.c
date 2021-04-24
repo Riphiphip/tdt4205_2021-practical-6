@@ -93,7 +93,7 @@ generate_main(symbol_t *first)
 
 static void generate_global_access(symbol_t *symbol)
 {
-    printf("\tmovq %s(%%rip), %%rax\n", symbol->name);
+    printf("\tmovq _%s(%%rip), %%rax\n", symbol->name);
 }
 
 static void generate_parameter_access(symbol_t *symbol)
@@ -254,7 +254,7 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 
 static void generate_global_assignment(symbol_t *symbol)
 {
-    printf("movq %%rax, %s(%%rip)\n", symbol->name);
+    printf("\tmovq %%rax, _%s(%%rip)\n", symbol->name);
 }
 
 static void generate_parameter_assignment(symbol_t *symbol)
@@ -385,16 +385,16 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
             break;
         }
         }
-        puts("pushq %rax");
-        puts("movq $2, %rax");
+        puts("\tpushq %rax");
+        puts("\tmovq $2, %rax");
         puts("\tcall printf");
-        puts("popq %rax");
+        puts("\tpopq %rax");
     };
     puts("\tmovq $'\\n, %rdi"); //Print newline
-    puts("pushq %rax");
-    puts("movq 12, %rax");
+    puts("\tpushq %rax");
+    puts("\tmovq 12, %rax");
     puts("\tcall printf");
-    puts("popq %rax");
+    puts("\tpopq %rax");
 }
 
 static void generate_statements(node_t *root, symbol_t *function, scope s)
@@ -448,56 +448,97 @@ static void generate_statements(node_t *root, symbol_t *function, scope s)
     }
 }
 
+// Comparison function between two symbol table entries. Sorts by sequence number
+int seq_comp(const void *e1, const void *e2)
+{
+    if (((symbol_t *)e1)->seq > ((symbol_t *)e2)->seq)
+        return 1;
+    if (((symbol_t *)e1)->seq < ((symbol_t *)e2)->seq)
+        return -1;
+    return 0;
+}
+
 static void generate_function(symbol_t *symbol)
 {
     printf(".globl __vsl_%s\n", symbol->name);
     puts(".text");
     printf("__vslc_%s:\n", symbol->name);
 
+    // Push the basepointer so we can use the stack dynamically.
+    // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically stores the old stack frame
+    puts("\tpushq %rbp");
     // Move the current stack pointer into the base pointer register
     // This is done so we can restore it later
-    puts("movq %rsp, %rbp");
-    // Fix stack allignment from function calls
-    puts("subq $8, %rsp");
+    puts("\tmovq %rsp, %rbp");
 
-    // Push the basepointer so we can use the stack dynamically.
-    // The stack pointer is stored in the base pointer from the mov-instruction above, so this practically pushes rsp too
-    puts("pushq %rbp");
+    size_t nlocals = tlhash_size(symbol->locals);
+    size_t stack_frame_size = nlocals * 8;
+    // Allocate the function's stack frame and align the stack pointer to a 16-byte boundary
+    // The function call pushes the return address (8 bytes), and we need 8 bytes for each local variable
+    // So the SP needs to be aligned by allocating 8 more bytes if nlocals + 1 is an odd number
+    if ((nlocals + 1) % 2 == 1)
+        stack_frame_size += 8;
+#if DEBUG_GENERATOR == 1
+    printf("# Allocating %lu bytes on the stack for %lu locals (aligned: %s) #\n",
+        stack_frame_size,
+        nlocals,
+        ((nlocals + 1) % 2 == 1) ? "yes" : "no"
+    );
+#endif
+    printf("\tsubq $%lu, %%rsp\n", stack_frame_size);
 
-    // 64 bits/8 bytes for each var on the stack
-    size_t stack_allocation = 8 * tlhash_size(symbol->locals);
-    // Allocate space on the stack for all locals
-    printf("subq $%lu, %%rsp\n", stack_allocation);
-    // Then put copies of the args onto the stack
-    // size_t nlocals = tlhash_size(symbol->locals);
-    // char **local_keys = malloc(sizeof(char *) * nlocals);
-    // tlhash_keys(symbol->locals, local_keys);
-    // int status;
-    // for (int arg = 0; arg < symbol->nparms; arg++)
-    // {
-    //     char *key = local_keys[arg];
-    //     symbol_t *local_sym;
-    //     tlhash_lookup(symbol->locals, key, strlen(key) + 1, local_sym);
-    //     node_t *local_node = local_sym->node;
-    //     int64_t val = (int64_t) local_node->data;
-    //     printf("pushq $%ld", val);
-    // }
-    // free(local_keys);
+    // Push all function arguments to the bottom of the stack in reverse order
+    symbol_t **locals = (symbol_t **) malloc(sizeof(symbol_t *) * nlocals);
+    tlhash_values(symbol->locals, (void **) locals);
+    // Sort to ensure correct pushing order
+    qsort(locals, nlocals, sizeof(symbol_t *), seq_comp);
 
-    // symbol_t **asd = malloc(symbol->nparms * sizeof(symbol_t *));
-    // tlhash_values(symbol->locals, asd);
-    // free(asd);
+    int status;
+    // Push onto the stack in reverse order because FILO
+    puts("\tpushq %rbx");
+    for (int i = symbol->nparms - 1; i >= 0; i--)
+    {
+        symbol_t *local = locals[i];
+#if DEBUG_GENERATOR == 1
+        printf("# Pushing argument %lu to function stack frame #\n", local->seq);
+#endif
+        if (local->seq <= 5)
+        {
+            printf("\tpushq %s\n", record[local->seq]);
+        }
+        else if(symbol->nparms > 6)
+        {
+            // Which parameter this is relative to the register-loaded arguments, starting at 0
+            // I.e. if this is parameter #7, it's relative seq is 0, if it's #8, the relative seq is 1, and so on
+            // This tells us how far back to go on the stack from where the stack arguments are
+            int relative_seq = local->seq - 7;
+
+            // The rest of the arguments are stored on the stack before the return address
+            // +8 because the return address is on top of the stack at %rbp
+            // Then we go back 8 bytes for each argument
+            int sp_offset = 8 + (relative_seq * 8);
+#if DEBUG_GENERATOR == 1
+            printf("# Retrieve argument %lu from preceding stack frame #\n", local->seq);
+#endif
+            printf("\tmovq %d(%%rbp), %%rbx\n", sp_offset);
+            puts("\tpushq %rbx");
+        }
+    }
+    free(locals);
+    puts("\tpopq %rbx");
+
+    // Set the basepointer to the top of this stack frame
+    puts("\tmovq %rsp, %rbp");
+
+    // Setup function scope for if and while labels and generate the meat & potatoes of the function
     scope s;
     s.if_id = 0;
     s.while_id = 0;
     generate_function_content(symbol->node, symbol, s);
 
-    // Restore the stack pointer and pop the basepointer
-    // This also deallocs what space we used on the stack, regardless of how much was allocated
-    // This means we avoid popping args off the stack too
-    puts("movq %rbp, %rsp");
-    puts("popq %rbp");
-    puts("ret");
+    // The leave instruction restores the stack for us by setting %rsp = %rbp and popping into %rbp
+    puts("\tleave");
+    puts("\tret");
 }
 
 static void generate_function_content(node_t *node, symbol_t *function, scope s)
@@ -523,16 +564,6 @@ static void generate_function_content(node_t *node, symbol_t *function, scope s)
     }
 }
 
-// Comparison function between two symbol table entries. Sorts by sequence number
-int seq_comp(const void *e1, const void *e2)
-{
-    if (((symbol_t *)e1)->seq > ((symbol_t *)e2)->seq)
-        return 1;
-    if (((symbol_t *)e1)->seq < ((symbol_t *)e2)->seq)
-        return -1;
-    return 0;
-}
-
 // Takes a calling expression and generates code to call the function from a given caller
 static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
 {
@@ -550,7 +581,7 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
     qsort(locals, nlocals, sizeof(symbol_t *), seq_comp);
 
 #if DEBUG_GENERATOR == 1
-    puts("%% BEGIN FCALL %%");
+    printf("# Function call (%s) #\n", (char *)func_identifier->data);
 #endif
     // Reverse order because args should be pushed onto the stack in reverse order (then popping gives correct arg order)
     for (int i = function->nparms - 1; i >= 0; i--)
@@ -558,12 +589,9 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
         symbol_t *local = locals[i];
         // Generate code that resolves the value of the argument
 #if DEBUG_GENERATOR == 1
-        printf("%% BEGIN RESOLVING ARG#%ld %%\n", local->seq);
+        printf("# Resolve value of argument %ld #\n", local->seq);
 #endif
         generate_expression(arg_list->children[local->seq], caller, s);
-#if DEBUG_GENERATOR == 1
-        printf("%% END RESOLVING ARG#%ld %%\n", local->seq);
-#endif
 
         // First 6 arguments go into registers
         if (local->type == SYM_PARAMETER && local->seq <= 5)
@@ -580,9 +608,6 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
 
     // Perform the call
     printf("\tcall __vslc_%s\n", function->name);
-#if DEBUG_GENERATOR == 1
-    puts("%% END FCALL %%");
-#endif
     free(locals);
 }
 
