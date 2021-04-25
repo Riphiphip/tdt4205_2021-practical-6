@@ -142,7 +142,7 @@ static void generate_comparison(node_t *root, symbol_t *function, scope s)
     puts("\tpushq %rax");
     generate_expression(root->children[1], function, s);
     puts("\tpopq %r10");
-    puts("\tcmp %r10, %rax");
+    puts("\tcmp %rax, %r10");
 }
 
 static void generate_expression(node_t *node, symbol_t *function, scope s)
@@ -550,9 +550,13 @@ static void generate_function(symbol_t *symbol)
             int relative_seq = argn - 7;
 
             // The rest of the arguments are stored on the stack before the return address
-            // +8 because the return address is on top of the stack at %rbp
+            // Initial offset:
+            // +  8 bytes to leave current stack fram
+            // +  8 bytes to skip %rbp
+            // +  8 bytes to skip return address
+            // = 24 byte
             // Then we go back 8 bytes for each argument
-            int sp_offset = 8 + (relative_seq * 8);
+            int sp_offset = 24 + (relative_seq * 8);
 #if DEBUG_GENERATOR == 1
             printf("# Retrieve argument %d from preceding stack frame #\n", argn);
 #endif
