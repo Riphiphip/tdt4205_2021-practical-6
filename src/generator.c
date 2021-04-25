@@ -7,8 +7,10 @@
 int while_id = 0;
 int if_id = 0;
 
-static void
-generate_stringtable(void)
+/**
+ * Generates the string table containing all strings used by the program
+ */
+static void generate_stringtable(void)
 {
     /* These can be used to emit numbers, strings and a run-time
 	 * error msg. from main
@@ -19,13 +21,17 @@ generate_stringtable(void)
     puts("newline: .asciz \"\\n\"");
     puts("errout: .asciz \"Wrong number of arguments\"");
 
-    /* TODO:  handle the strings from the program */
+    // Go through all strings from the program and put them in the data section
     for (int i = 0; i < stringc; i++)
     {
         printf("STR%d:\t.asciz %s\n", i, string_list[i]);
     }
 }
 
+/**
+ * Reserves space for every global variable in mutable memory
+ * Note that all global names have the prefix "__vslc_"
+ */
 static void generate_global_vars(void)
 {
     puts(".data");
@@ -37,14 +43,18 @@ static void generate_global_vars(void)
         symbol_t *curr_sym = gnames[i];
         if (curr_sym->type == SYM_GLOBAL_VAR)
         {
-            printf("_%s:\t.zero 8\n", curr_sym->name);
+            printf("__vslc_%s:\t.zero 8\n", curr_sym->name);
         }
     }
     free(gnames);
 }
 
-static void
-generate_main(symbol_t *first)
+/**
+ * Generates an entry point for the program that handles boilerplate such as reading and validating program input
+ * 
+ * @arg first The first function of the program to be executed
+ */
+static void generate_main(symbol_t *first)
 {
     puts(".globl main");
     puts(".text");
@@ -92,50 +102,69 @@ generate_main(symbol_t *first)
     puts("\tcall exit");
 }
 
+/**
+ * Generates code for accessing a global variable
+ * The value of the accessed global is stored in %rax
+ * 
+ * @arg symbol   The symbol table entry for the global to access
+ * @arg function The symbol table entry for the global's enclosing function
+ */
 static void generate_global_access(symbol_t *symbol)
 {
-    printf("\tmovq _%s(%%rip), %%rax\n", symbol->name);
+    printf("\tmovq __vslc_%s(%%rip), %%rax\n", symbol->name);
 }
 
-// Moves the given parameter into %rax
-static void generate_parameter_access(symbol_t *symbol)
+/**
+ * Generates code for accessing a local variable (param/otherwise)
+ * The value of the accessed variable is stored in %rax
+ * 
+ * @arg symbol   The symbol table entry for the variable to access
+ * @arg function The symbol table entry for the variable's enclosing function
+ */
+static void generate_variable_access(symbol_t *symbol, symbol_t *function)
 {
 #if DEBUG_GENERATOR == 1
-    printf("# Access parameter (%s, seq: %lu) #\n", symbol->name, symbol->seq);
+    printf("# Access variable (%s, seq: %lu) #\n", symbol->name, symbol->seq);
 #endif
-    // x86's push decrements before moving the value into the stack,
-    // so -8(%rbp) contains the first param, -16(%rbp) the second, etc.
-    int rbp_offset = -((symbol->seq + 1) * 8);
+    // x86 decrements the stack pointer before moving values onto the stack
+    // This means that %rsp is the pointer to the data on the top of the stack, not where the next value is placed
+    // So we need to add 1 to the sequence number to index the correct data on the stack
+    // Additionally, parameters and locals are stored in different places on the stack
+    int rbp_offset = -((symbol->seq + 1) * 8 + (symbol->type == SYM_PARAMETER) ? 0 : ALIGNED_VARIABLES(function->nparms));
     printf("\tmovq %d(%%rbp), %%rax\n", rbp_offset);
 }
 
-// Moves the given symbol into %rax
-static void generate_local_access(symbol_t *symbol, symbol_t *function)
-{
-#if DEBUG_GENERATOR == 1
-    printf("# Access local (%s, seq: %lu) #\n", symbol->name, symbol->seq);
-#endif
-    int rbp_offset = -((symbol->seq + 1) * 8 + ALIGNED_VARIABLES(function->nparms));
-    printf("\tmovq %d(%%rbp), %%rax\n", rbp_offset);
-}
-
+/**
+ * Generates access to a variable
+ * Delegates the job of generating code to the correct function based on symbol type
+ * 
+ * @arg symbol   The symbol table entry for the symbol to access
+ * @arg function The symbol table entry for the symbol's enclosing function
+ */
 static void generate_access(symbol_t *symbol, symbol_t *function)
 {
-    // printf("/* Access to variable \"%s\"*/\n", symbol->name);
     switch (symbol->type)
     {
     case SYM_GLOBAL_VAR:
         generate_global_access(symbol);
         break;
     case SYM_PARAMETER:
-        generate_parameter_access(symbol);
+        generate_variable_access(symbol, function);
         break;
     case SYM_LOCAL_VAR:
-        generate_local_access(symbol, function);
+        generate_variable_access(symbol, function);
         break;
     }
 }
 
+/**
+ * Generates code for performing a comparison between two expressions
+ * Does this by evaluating the expressions and having them placed into %rax/%r10
+ *
+ * @arg root     The comparison node to generate code for
+ * @arg function The symbol table entry for the comparison's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_comparison(node_t *root, symbol_t *function, scope s)
 {
     generate_expression(root->children[0], function, s);
@@ -145,6 +174,13 @@ static void generate_comparison(node_t *root, symbol_t *function, scope s)
     puts("\tcmp %rax, %r10");
 }
 
+/**
+ * Generates code for evaluating an arbitrary expression
+ *
+ * @arg node     The expression node to generate code for
+ * @arg function The symbol table entry for the expression's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_expression(node_t *node, symbol_t *function, scope s)
 {
     if (node == NULL)
@@ -288,29 +324,42 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
     }
 }
 
+/**
+ * Generates code to assign a value to a global
+ * The value in %rax is used for the assignment
+ * 
+ * @arg symbol   The symbol table entry for the global to perform an assignment for
+ */
 static void generate_global_assignment(symbol_t *symbol)
 {
-    printf("\tmovq %%rax, _%s(%%rip)\n", symbol->name);
+    printf("\tmovq %%rax, __vslc_%s(%%rip)\n", symbol->name);
 }
 
-static void generate_parameter_assignment(symbol_t *symbol)
+/**
+ * Generates code to assign a value to a variable
+ * The value in %rax is used for the assignment
+ * 
+ * @arg symbol   The symbol table entry for the variable to perform an assignment for
+ * @arg function The symbol table entry for the variable's enclosing function
+ */
+static void generate_variable_assignment(symbol_t *symbol, symbol_t *function)
 {
 #if DEBUG_GENERATOR == 1
-    printf("# Parameter assignment of %s #\n", symbol->name);
+    printf("# Variable assignment of %s #\n", symbol->name);
 #endif
-    int rbp_offset = -((symbol->seq + 1) * 8);
+    // See generate_variable_access. This is the exact same arithmetic
+    int rbp_offset = -((symbol->seq + 1) * 8 + (symbol->type == SYM_PARAMETER) ? 0 : ALIGNED_VARIABLES(function->nparms));
     printf("\tmovq %%rax, %d(%%rbp)\n", rbp_offset);
 }
 
-static void generate_local_assignment(symbol_t *symbol, symbol_t *function)
-{
-#if DEBUG_GENERATOR == 1
-    printf("# Local assignment of %s #\n", symbol->name);
-#endif
-    int rbp_offset = -((symbol->seq + 1) * 8 + ALIGNED_VARIABLES(function->nparms));
-    printf("\tmovq %%rax, %d(%%rbp)\n", rbp_offset);
-}
-
+/**
+ * Generates code to assign the value of an expression to a variable
+ * This generates the expression value and assigns it to the given variable
+ * 
+ * @arg node     The assignment node to generate code for
+ * @arg function The symbol table entry for the assignment's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_assignment(node_t *node, symbol_t *function, scope s)
 {
     generate_expression(node->children[1], function, s);
@@ -320,14 +369,21 @@ static void generate_assignment(node_t *node, symbol_t *function, scope s)
         generate_global_assignment(node->children[0]->entry);
         break;
     case SYM_PARAMETER:
-        generate_parameter_assignment(node->children[0]->entry);
+        generate_variable_assignment(node->children[0]->entry, function);
         break;
     case SYM_LOCAL_VAR:
-        generate_local_assignment(node->children[0]->entry, function);
+        generate_variable_assignment(node->children[0]->entry, function);
         break;
     }
 }
 
+/**
+ * Generates code to perform a conditional branch
+ * 
+ * @arg root     The if statement node to generate code for
+ * @arg function The symbol table entry for the if statement's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_if_statement(node_t *root, symbol_t *function, scope s)
 {
     s.if_id = ++if_id;
@@ -371,6 +427,13 @@ static void generate_if_statement(node_t *root, symbol_t *function, scope s)
     printf("__vslif_%d_bottom:\n", s.if_id);
 }
 
+/**
+ * Generates code to perform a while loop
+ * 
+ * @arg root     The while statement node to generate code for
+ * @arg function The symbol table entry for the while statement's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_while_statement(node_t *root, symbol_t *function, scope s)
 {
     s.while_id = ++while_id;
@@ -403,6 +466,13 @@ static void generate_while_statement(node_t *root, symbol_t *function, scope s)
     printf("__vslwhile_%d_bottom:\n", s.while_id);
 }
 
+/**
+ * Generates code to print a statement
+ * 
+ * @arg root     The print statement node to generate code for
+ * @arg function The symbol table entry for the print statement's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_print_statement(node_t *root, symbol_t *function, scope s)
 {
 
@@ -451,6 +521,16 @@ static void generate_print_statement(node_t *root, symbol_t *function, scope s)
     puts("\tpopq %rax");
 }
 
+/**
+ * Generates code for an arbitrary statement
+ * If the given node is not any type of statement, statements are recursively
+ * generated for all of the node's children. Note that this means generate_statements
+ * is able to generate the entirety of function bodies.
+ * 
+ * @arg root     The node to generate statements for
+ * @arg function The symbol table entry for the statement's enclosing function
+ * @arg s        The function scope containing if/while IDs
+ */
 static void generate_statements(node_t *root, symbol_t *function, scope s)
 {
     switch (root->type)
@@ -503,7 +583,12 @@ static void generate_statements(node_t *root, symbol_t *function, scope s)
     }
 }
 
-// Comparison function between two symbol table entries. Sorts by sequence number
+/**
+ * Comparison function for two symbol table entries. Sorts by the symbols' sequence numbers
+ * 
+ * @arg e1 The first symbol to compare
+ * @arg e2 The second symbol to compare
+ */
 int seq_comp(const void *e1, const void *e2)
 {
     if (((symbol_t *)e1)->seq > ((symbol_t *)e2)->seq)
@@ -513,6 +598,11 @@ int seq_comp(const void *e1, const void *e2)
     return 0;
 }
 
+/**
+ * Generates a function prologue, body and exit code for a given symbol
+ * 
+ * @arg symbol The function symbol to generate code for
+ */
 static void generate_function(symbol_t *symbol)
 {
     printf(".globl __vslc_%s\n", symbol->name);
@@ -596,6 +686,13 @@ static void generate_function(symbol_t *symbol)
 }
 
 // Takes a calling expression and generates code to call the function from a given caller
+/**
+ * Generates code for calling a given function, including passing arguments
+ * 
+ * @arg call_node The expression node representing the function call
+ * @arg caller    The symbol table entry for the calling function
+ * @arg s         The calling function's scope containing if/while IDs
+ */
 static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
 {
     // Identifier node for the function to be called
@@ -638,6 +735,9 @@ static void generate_function_call(node_t *call_node, symbol_t *caller, scope s)
     printf("\tcall __vslc_%s\n", function->name);
 }
 
+/**
+ * Generates all functions in the program
+ */
 static void generate_functions(void)
 {
     size_t gname_size = tlhash_size(global_names);
@@ -659,16 +759,12 @@ static void generate_functions(void)
     free(gnames);
 }
 
+/**
+ * Generates code for the entire program
+ */
 void generate_program(void)
 {
     generate_stringtable();
     generate_global_vars();
     generate_functions();
-
-    // /* Put some dummy stuff to keep the skeleton from crashing */
-    // puts(".globl main");
-    // puts(".text");
-    // puts("main:");
-    // puts("\tmovq $0, %rax");
-    // puts("\tcall exit");
 }
