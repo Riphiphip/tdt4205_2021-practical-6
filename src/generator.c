@@ -201,9 +201,7 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 #if DEBUG_GENERATOR == 1
                 printf("# Multiplication of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
 #endif
-                puts("\tpushq %rdx");
                 puts("\timulq %r10");
-                puts("\tpopq %rdx");
                 break;
             }
             case '/':
@@ -211,13 +209,11 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 #if DEBUG_GENERATOR == 1
                 printf("# Division of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
 #endif
-                puts("\tpushq %rdx");
                 puts("\tmovq %rax, %rdx");
                 puts("\tmovq %r10, %rax");
                 puts("\tmovq %rdx, %r10");
                 puts("\tcqto"); //Extend sign from %rax into %rdx.
                 puts("\tidivq %r10");
-                puts("\tpopq %rdx");
                 break;
             }
             case '<':
@@ -225,11 +221,9 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 #if DEBUG_GENERATOR == 1
                 printf("# Bitwise left shift of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
 #endif
-                puts("\tpushq %rcx");
                 puts("\tmovq %rax, %rcx");
                 puts("\tmovq %r10, %rax");
                 puts("\tshl %cl, %rax");
-                puts("\tpopq %rcx");
                 break;
             }
             case '>':
@@ -237,11 +231,9 @@ static void generate_expression(node_t *node, symbol_t *function, scope s)
 #if DEBUG_GENERATOR == 1
                 printf("# Bitwise right shift of %s by %s #\n", (char *)node->children[0]->data, (char *)node->children[1]->data);
 #endif
-                puts("\tpushq %rcx");
                 puts("\tmovq %rax, %rcx");
                 puts("\tmovq %r10, %rax");
                 puts("\tshr %cl, %rax");
-                puts("\tpopq %rcx");
                 break;
             }
             case '&':
