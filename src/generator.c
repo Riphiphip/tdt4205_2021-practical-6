@@ -551,7 +551,7 @@ static void generate_function(symbol_t *symbol)
 
             // The rest of the arguments are stored on the stack before the return address
             // Initial offset:
-            // +  8 bytes to leave current stack fram
+            // +  8 bytes to leave current stack frame
             // +  8 bytes to skip %rbp
             // +  8 bytes to skip return address
             // = 24 byte
