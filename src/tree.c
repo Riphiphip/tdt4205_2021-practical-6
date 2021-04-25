@@ -142,7 +142,7 @@ simplify_tree ( node_t **simplified, node_t *root )
 			}else if ((strcmp(cc,"*")==0)){
 			*x *= *y; 
 			}else if ((strcmp(cc,"/")==0)){
-			*x %= *y; 
+			*x /= *y; 
 			}else if ((strcmp(cc,"<<")==0)){
 			*x =  *x << *y; 
 			}else if ((strcmp(cc,">>")==0)){
