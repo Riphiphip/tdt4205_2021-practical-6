@@ -592,34 +592,11 @@ static void generate_function(symbol_t *symbol)
     scope s;
     s.if_id = 0;
     s.while_id = 0;
-    generate_function_content(symbol->node, symbol, s);
+    generate_statements(symbol->node, symbol, s);
 
     // The leave instruction restores the stack for us by setting %rsp = %rbp and popping into %rbp
     puts("\tleave");
     puts("\tret");
-}
-
-static void generate_function_content(node_t *node, symbol_t *function, scope s)
-{
-    // Go through all children, generating relevant function content
-    for (int i = 0; i < node->n_children; i++)
-    {
-        node_t *child = node->children[i];
-        if (child->type == BLOCK)
-        {
-            // Blocks can have both declarations and statements or only statements
-            // No code is generated for declarations anyways, so we only need to get the statements
-            // If the block has 2 children, the 1st is the declaration list and the 2nd is the statement list
-            // Otherwise, the first child is the statement list
-            node_t *statement_list = child->children[child->n_children == 1 ? 0 : 1];
-            generate_statements(statement_list, function, s);
-        }
-        else
-        {
-            // The node type must be a statement of some kind, per the grammar
-            generate_statements(node, function, s);
-        }
-    }
 }
 
 // Takes a calling expression and generates code to call the function from a given caller
