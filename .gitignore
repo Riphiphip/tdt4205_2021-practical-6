@@ -2,6 +2,9 @@ src/scanner.c
 src/parser.c
 src/vslc
 src/y.tab.h
+vsl_programs/*
+!vsl_programs/*.vsl
+!vsl_programs/Makefile
 .vscode/
 
 make_run_output.txt

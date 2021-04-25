@@ -16,11 +16,13 @@ all: ${TARGETS}
 #
 
 %: %.s
-	$(CC) -o $@ $< -no-pie
+	gcc -o $@ -g $< -no-pie	
+#$(CC) -o $@ $< -no-pie
 
 .PRECIOUS: %.s
 %.s: %.vsl
 	../src/vslc <$*.vsl > $*.s
+
 
 clean:
 	-rm -f *.s
