@@ -6,12 +6,11 @@ typedef struct
     int while_id;
 } scope;
 
-#define DEBUG_GENERATOR 1
+#define DEBUG_GENERATOR 0
 
 // How many registers are used for parameters before resorting to using the stack
 #define N_PARAM_REGISTERS 6
 static const char *record[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
-static const char *callee_save_registers[6] = {"%rbx", "%r12", "%r13", "%r14", "%r15", "%rbp"};
 
 #define ALIGN_BYTES(amount) ((amount + 15) & (~15))
 #define ALIGNED_VARIABLES(amount) (ALIGN_BYTES(amount*8))
