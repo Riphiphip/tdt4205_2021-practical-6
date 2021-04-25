@@ -130,7 +130,7 @@ static void generate_variable_access(symbol_t *symbol, symbol_t *function)
     // This means that %rsp is the pointer to the data on the top of the stack, not where the next value is placed
     // So we need to add 1 to the sequence number to index the correct data on the stack
     // Additionally, parameters and locals are stored in different places on the stack
-    int rbp_offset = -((symbol->seq + 1) * 8 + (symbol->type == SYM_PARAMETER) ? 0 : ALIGNED_VARIABLES(function->nparms));
+    int rbp_offset = -((symbol->seq + 1) * 8 + ((symbol->type == SYM_PARAMETER) ? 0 : ALIGNED_VARIABLES(function->nparms)));
     printf("\tmovq %d(%%rbp), %%rax\n", rbp_offset);
 }
 
@@ -348,7 +348,7 @@ static void generate_variable_assignment(symbol_t *symbol, symbol_t *function)
     printf("# Variable assignment of %s #\n", symbol->name);
 #endif
     // See generate_variable_access. This is the exact same arithmetic
-    int rbp_offset = -((symbol->seq + 1) * 8 + (symbol->type == SYM_PARAMETER) ? 0 : ALIGNED_VARIABLES(function->nparms));
+    int rbp_offset = -((symbol->seq + 1) * 8 + ((symbol->type == SYM_PARAMETER) ? 0 : ALIGNED_VARIABLES(function->nparms)));
     printf("\tmovq %%rax, %d(%%rbp)\n", rbp_offset);
 }
 
