@@ -14,8 +14,8 @@ generate_stringtable(void)
 	 * error msg. from main
 	 */
     puts(".data");
-    puts("intout: .asciz \"\%ld \"");
-    puts("strout: .asciz \"\%s \"");
+    puts("intout: .asciz \"\%ld\"");
+    puts("strout: .asciz \"\%s\"");
     puts("newline: .asciz \"\\n\"");
     puts("errout: .asciz \"Wrong number of arguments\"");
 
