@@ -15,6 +15,9 @@ purge: clean
 full: purge src/vslc
 	-cd ./vsl_programs && make purge && make
 
+full_purge: purge
+	-cd ./vsl_programs && make purge
+
 .PHONY:run
 run: src/vslc
 	./src/vslc < ./vsl_programs/_test.vsl > make_run_output.s
